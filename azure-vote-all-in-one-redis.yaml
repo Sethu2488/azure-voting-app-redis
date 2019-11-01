@@ -1,3 +1,56 @@
+Skip to content
+Search or jump to…
+
+Pull requests
+Issues
+Marketplace
+Explore
+ 
+@Sethu2488 
+Learn Git and GitHub without any code!
+Using the Hello World guide, you’ll start a branch, write comments, and open a pull request.
+
+
+23
+1038Azure-Samples/azure-voting-app
+ Code Issues 0 Pull requests 0 Projects 0 Wiki Security Insights
+azure-voting-app/kubernetes-manifests/azure-vote-all-in-one.yaml
+@neilpeterson neilpeterson initial files
+f47e1f7 on Jun 17, 2017
+153 lines (153 sloc)  3.19 KB
+  
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+ name: slow
+provisioner: kubernetes.io/azure-disk
+parameters:
+ skuName: Standard_LRS
+ location: eastus
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-pv-claim
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: azure-vote
+type: Opaque
+data:
+  MYSQL_USER: ZGJ1c2Vy
+  MYSQL_PASSWORD: UGFzc3dvcmQxMg==
+  MYSQL_DATABASE: YXp1cmV2b3Rl
+  MYSQL_HOST: YXp1cmUtdm90ZS1iYWNr
+  MYSQL_ROOT_PASSWORD: UGFzc3dvcmQxMg==
+---
 apiVersion: apps/v1beta1
 kind: Deployment
 metadata:
@@ -9,14 +62,41 @@ spec:
       labels:
         app: azure-vote-back
     spec:
-      nodeSelector:
-        "beta.kubernetes.io/os": linux
       containers:
       - name: azure-vote-back
-        image: redis
+        image: microsoft/azure-vote-back:v1
+        args: ["--ignore-db-dir=lost+found"]
         ports:
-        - containerPort: 6379
-          name: redis
+        - containerPort: 3306
+          name: mysql
+        volumeMounts:
+        - name: mysql-persistent-storage
+          mountPath: /var/lib/mysql
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: azure-vote
+              key: MYSQL_ROOT_PASSWORD
+        - name: MYSQL_USER
+          valueFrom:
+            secretKeyRef:
+              name: azure-vote
+              key: MYSQL_USER
+        - name: MYSQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: azure-vote
+              key: MYSQL_PASSWORD
+        - name: MYSQL_DATABASE
+          valueFrom:
+            secretKeyRef:
+              name: azure-vote
+              key: MYSQL_DATABASE
+      volumes:
+      - name: mysql-persistent-storage
+        persistentVolumeClaim:
+          claimName: mysql-pv-claim
 ---
 apiVersion: v1
 kind: Service
@@ -24,7 +104,7 @@ metadata:
   name: azure-vote-back
 spec:
   ports:
-  - port: 6379
+  - port: 3306
   selector:
     app: azure-vote-back
 ---
@@ -44,11 +124,14 @@ spec:
       labels:
         app: azure-vote-front
     spec:
-      nodeSelector:
-        "beta.kubernetes.io/os": linux
       containers:
       - name: azure-vote-front
         image: microsoft/azure-vote-front:v1
+        resources:
+          requests:
+            cpu: 250m
+          limits:
+            cpu: 500m
         ports:
         - containerPort: 80
         resources:
@@ -56,9 +139,28 @@ spec:
             cpu: 250m
           limits:
             cpu: 500m
+        imagePullPolicy: Always
         env:
-        - name: REDIS
-          value: "azure-vote-back"
+        - name: MYSQL_USER
+          valueFrom:
+            secretKeyRef:
+              name: azure-vote
+              key: MYSQL_USER
+        - name: MYSQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: azure-vote
+              key: MYSQL_PASSWORD
+        - name: MYSQL_DATABASE
+          valueFrom:
+            secretKeyRef:
+              name: azure-vote
+              key: MYSQL_DATABASE
+        - name: MYSQL_HOST
+          valueFrom:
+            secretKeyRef:
+              name: azure-vote
+              key: MYSQL_HOST
 ---
 apiVersion: v1
 kind: Service
@@ -70,3 +172,4 @@ spec:
   - port: 80
   selector:
     app: azure-vote-front
+
